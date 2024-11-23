@@ -1,0 +1,13 @@
+# Folders to ignore
+
+DTrOCR/
+ground_truth/
+Images_90K_Normalized/
+pretrained_repos/
+
+# Files to ignore
+
+*.tar.gz
+*cache.txt
+*.pt
+
