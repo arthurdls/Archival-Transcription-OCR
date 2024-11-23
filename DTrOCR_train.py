@@ -158,7 +158,7 @@ use_amp = True
 scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 optimiser = torch.optim.Adam(params=model.parameters(), lr=1e-4)
 
-EPOCHS = 2
+EPOCHS = 8
 train_losses, train_accuracies = [], []
 validation_losses, validation_accuracies = [], []
 for epoch in range(EPOCHS):
