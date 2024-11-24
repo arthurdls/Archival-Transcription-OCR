@@ -123,10 +123,7 @@ model = torch.compile(model)
 model.to(device=device)
 print(model)
 
-torch.save(model.state_dict(), 'trained_model/pretrained_model_state_dict.pt')
-
 # Training
-
 
 print("Training Model...")
 
@@ -185,6 +182,10 @@ for epoch in range(EPOCHS):
         epoch_losses.append(outputs.loss.item())
         epoch_accuracies.append(outputs.accuracy.item())
 
+        iters = len(epoch_losses)
+        if iters % 100 == 0:
+            print(f"Iter: {iters} - Loss: {sum(epoch_losses[-100:])/100} - Accuracy: {sum(epoch_accuracies[-100:])/100}")
+
     # store loss and metrics
     train_losses.append(sum(epoch_losses) / len(epoch_losses))
     train_accuracies.append(sum(epoch_accuracies) / len(epoch_accuracies))
@@ -195,6 +196,7 @@ for epoch in range(EPOCHS):
     validation_accuracies.append(validation_accuracy)
 
     print(f"Epoch: {epoch + 1} - Train loss: {train_losses[-1]}, Train accuracy: {train_accuracies[-1]}, Validation loss: {validation_losses[-1]}, Validation accuracy: {validation_accuracies[-1]}")
+    torch.save(model.state_dict(), f'trained_model/epoch_{epoch + 1}_checkpoint_model_state_dict.pt')
 
 torch.save(model.state_dict(), 'trained_model/trained_model_state_dict.pt')
 
