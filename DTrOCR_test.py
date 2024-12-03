@@ -20,12 +20,12 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-os.environ['HF_HUB_OFFLINE']='1'
-torch.multiprocessing.set_sharing_strategy('file_system')
+# os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+# os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+# os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+# os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+# os.environ['HF_HUB_OFFLINE']='1'
+# torch.multiprocessing.set_sharing_strategy('file_system')
 
 # print("Loading Cache...")
 
@@ -91,8 +91,8 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 config = DTrOCRConfig(
     # attn_implementation='flash_attention_2'
-    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
-    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    # gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    # vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -206,18 +206,18 @@ from datasets import load_dataset
 IAM = load_dataset("Teklia/IAM-line")
 SROIE = load_dataset("rth/sroie-2019-v2")
 
-model.load_state_dict(torch.load('./trained_model/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load('./epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
 model.eval()
 model.to('cpu')
 test_processor = DTrOCRProcessor(config)
 
 
-for datapoint in SROIE['test']:
+for datapoint in IAM['test']:
     image = datapoint['image']
     actual_text = datapoint['text']
 
     inputs = test_processor(
-        images=image,
+        images=image.convert('RGB'),
         texts=test_processor.tokeniser.bos_token,
         return_tensors='pt'
     )
