@@ -14,13 +14,21 @@ from DTrOCR.dtrocr.processor import DTrOCRProcessor, modified_build_inputs_with_
 from DTrOCR.dtrocr.config import DTrOCRConfig
 from DTrOCR.dtrocr.model import DTrOCRLMHeadModel
 
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+import warnings
+warnings.filterwarnings("ignore")
 
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
+
+os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+os.environ['HF_HUB_OFFLINE']='1'
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 # Model
 
@@ -35,12 +43,16 @@ else:
 
 torch.set_float32_matmul_precision('high')
 
-state_dict = torch.load('./epoch_7_checkpoint_model_state_dict.pt', weights_only=True)
-config = DTrOCRConfig(max_position_embeddings = 512)
+state_dict = torch.load('./trained_model/epoch_7_checkpoint_model_state_dict.pt', weights_only=True)
+config = DTrOCRConfig(
+    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    max_position_embeddings = 512
+)
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
 model.to(device=device)
-model.load_state_dict(state_dict, strict=False)
+model.load_state_dict(state_dict)
 
 print(model)
 
@@ -72,8 +84,8 @@ for name, param in model._orig_mod.named_parameters():
 
 print("Loading Data...")
 
-from datasets import load_dataset
-IAM = load_dataset("Teklia/IAM-line")
+from datasets import load_from_disk
+IAM = load_from_disk(os.getcwd() + "/IAM") # "Teklia/IAM-line")
 
 train_data_list = IAM['train']
 validation_data_list = IAM['validation']
@@ -147,10 +159,10 @@ def send_inputs_to_device(dictionary, device):
     return {key: value.to(device=device) if isinstance(value, torch.Tensor) else value for key, value in dictionary.items()}
 
 use_amp = True
-scaler = torch.amp.GradScaler('cuda') 
+scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 optimiser = torch.optim.Adam(params=model.parameters(), lr=1e-4)
 
-EPOCHS = 8
+EPOCHS = 50
 train_losses, train_accuracies = [], []
 validation_losses, validation_accuracies = [], []
 for epoch in range(EPOCHS):
@@ -191,7 +203,6 @@ for epoch in range(EPOCHS):
     validation_accuracies.append(validation_accuracy)
 
     print(f"Epoch: {epoch + 1} - Train loss: {train_losses[-1]}, Train accuracy: {train_accuracies[-1]}, Validation loss: {validation_losses[-1]}, Validation accuracy: {validation_accuracies[-1]}")
-    torch.save(model.state_dict(), f'trained_model/finetuned_epoch_{epoch + 1}_checkpoint_model_state_dict.pt')
 
 torch.save(model.state_dict(), 'trained_model/finetuned_model_state_dict.pt')
 
