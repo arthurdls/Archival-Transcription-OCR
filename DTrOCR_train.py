@@ -14,6 +14,9 @@ from DTrOCR.dtrocr.processor import DTrOCRProcessor, modified_build_inputs_with_
 from DTrOCR.dtrocr.config import DTrOCRConfig
 from DTrOCR.dtrocr.model import DTrOCRLMHeadModel
 
+import warnings
+warnings.filterwarnings("ignore")
+
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
@@ -27,46 +30,103 @@ os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
 os.environ['HF_HUB_OFFLINE']='1'
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-print("Loading Cache...")
-
-files_downloaded = set()
-
-with open('./files_downloaded_cache.txt', 'r') as cache:
-    for line in cache:
-        files_downloaded.add(line.replace("\n","")) 
-        
 print("Loading Data...")
 
-train_data_list = []
+files = [
+    'white_line',
+    'white_blur_line',
+    'white_distort_line',
+    'noise_line',
+    'noise_blur_line',
+    'noise_distort_line',
+    'sepia_line',
+    'sepia_blur_line',
+    'sepia_distort_line'
+]
+
+cursive_lines_data = {file:[] for file in files}
+scene_lines_data = {file:[] for file in files}
 validation_data_list = []
-test_data_list = [] # TODO
+train_data_list = []
 
-with open('./ground_truth/IIIT-HWS-90K.txt', 'r') as file:
-    for line in file:
-        # flag: train = 0, validation = 1
-        img_path, target, _, train_val_flag = line.split()
-        datapoint = {
-            'image_path': os.getcwd() + '/Images_90K_Normalized/' + img_path,
-            'text': target
-        }
-        if datapoint['image_path'] not in files_downloaded:
-            continue
+single_words_data = {
+    'noise_word':[],
+    'noise_word_blur':[],
+    'noise_word_distort':[],
+    'sepia_word':[],
+    'sepia_word_blur':[],
+    'sepia_word_distort':[],
+    'white_word':[],
+    'white_word_blur':[],
+    'white_word_distort':[]
+}
 
-        if train_val_flag == '0':
-            train_data_list.append(datapoint)
-        elif train_val_flag == '1':
-            validation_data_list.append(datapoint)
+for file_name, train_data_sublist in single_words_data.items():
+    with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
+        for line in file:
+            img_path, target = line.replace(",", "").replace("\n","").split(" ")
+            if img_path == 'image':
+                continue
+            datapoint = {
+                'image_path': os.getcwd() + f'/../single_word/{file_name}/' + img_path,
+                'text': target
+            }
+            # 20% of data goes to validation
+            if random.randint(1, 5) == 1:
+                validation_data_list.append(datapoint)
+            else:
+                train_data_sublist.append(datapoint)
 
+for file_name, train_data_sublist in cursive_lines_data.items():
+    with open(f'../cursive_lines/{file_name}/labels.txt', 'r') as file:
+        for line in file:
+            split_line = line.replace(",", "").replace("\n","").split(" ")
+            img_path, target = split_line[0], " ".join(split_line[1:])
+            if img_path == 'image':
+                continue
+            datapoint = {
+                'image_path': os.getcwd() + f'/../cursive_lines/{file_name}/' + img_path,
+                'text': target
+            }
+            # 20% of data goes to validation
+            if random.randint(1, 5) == 1:
+                validation_data_list.append(datapoint)
+            else:
+                train_data_sublist.append(datapoint)
 
+for file_name, train_data_sublist in scene_lines_data.items():
+    with open(f'../scene_lines/{file_name}/labels.txt', 'r') as file:
+        for line in file:
+            split_line = line.replace(",", "").replace("\n","").split(" ")
+            img_path, target = split_line[0], " ".join(split_line[1:])
 
+            if img_path == 'image':
+                continue
+            datapoint = {
+                'image_path': os.getcwd() + f'/../scene_lines/{file_name}/' + img_path,
+                'text': target
+            }
+            # 20% of data goes to validation
+            if random.randint(1, 5) == 1:
+                validation_data_list.append(datapoint)
+            else:
+                train_data_sublist.append(datapoint)
 
-print(f'Train size: {len(train_data_list)}; Validation size {len(validation_data_list)}; Test size: {len(test_data_list)}')
+# unify train data
+for file_name, train_data_sublist in cursive_lines_data.items():
+    train_data_list += train_data_sublist
+for file_name, train_data_sublist in scene_lines_data.items():
+    train_data_list += train_data_sublist
+for file_name, train_data_sublist in single_words_data.items():
+    train_data_list += train_data_sublist
+
+print(f'Train size: {len(train_data_list)}; Validation size {len(validation_data_list)}')
 
 # Data Loader
 
-class IIITHWSDataset(Dataset):
+class SyntheticDataset(Dataset):
     def __init__(self, words, config: DTrOCRConfig):
-        super(IIITHWSDataset, self).__init__()
+        super(SyntheticDataset, self).__init__()
         self.words = words
         self.processor = DTrOCRProcessor(config, add_eos_token=True, add_bos_token=True)
 
@@ -96,14 +156,11 @@ config = DTrOCRConfig(
     max_position_embeddings = 512
 )
 
-train_data = IIITHWSDataset(words=train_data_list, config=config)
-validation_data = IIITHWSDataset(words=validation_data_list, config=config)
-# test_data = IIITHWSDataset(words=test_data_list, config=config)
-
+train_data = SyntheticDataset(words=train_data_list, config=config)
+validation_data = SyntheticDataset(words=validation_data_list, config=config)
 
 train_dataloader = DataLoader(train_data, batch_size=32, shuffle=True, num_workers=mp.cpu_count())
 validation_dataloader = DataLoader(validation_data, batch_size=32, shuffle=False, num_workers=mp.cpu_count())
-# test_dataloader = DataLoader(test_data, batch_size=32, shuffle=False, num_workers=mp.cpu_count())
 
 # Model
 
@@ -155,7 +212,7 @@ use_amp = True
 scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 optimiser = torch.optim.Adam(params=model.parameters(), lr=1e-4)
 
-EPOCHS = 8
+EPOCHS = 80
 train_losses, train_accuracies = [], []
 validation_losses, validation_accuracies = [], []
 for epoch in range(EPOCHS):
@@ -182,9 +239,9 @@ for epoch in range(EPOCHS):
         epoch_losses.append(outputs.loss.item())
         epoch_accuracies.append(outputs.accuracy.item())
 
-        iters = len(epoch_losses)
-        if iters % 100 == 0:
-            print(f"Iter: {iters} - Loss: {sum(epoch_losses[-100:])/100} - Accuracy: {sum(epoch_accuracies[-100:])/100}")
+        # iters = len(epoch_losses)
+        # if iters % 100 == 0:
+        #     print(f"Iter: {iters} - Loss: {sum(epoch_losses[-100:])/100} - Accuracy: {sum(epoch_accuracies[-100:])/100}")
 
     # store loss and metrics
     train_losses.append(sum(epoch_losses) / len(epoch_losses))
@@ -196,38 +253,6 @@ for epoch in range(EPOCHS):
     validation_accuracies.append(validation_accuracy)
 
     print(f"Epoch: {epoch + 1} - Train loss: {train_losses[-1]}, Train accuracy: {train_accuracies[-1]}, Validation loss: {validation_losses[-1]}, Validation accuracy: {validation_accuracies[-1]}")
-    torch.save(model.state_dict(), f'trained_model/epoch_{epoch + 1}_checkpoint_model_state_dict.pt')
+    torch.save(model.state_dict(), f'trained_model/epoch_{epoch + 1}_checkpoint_new_synthetic_model_state_dict.pt')
 
-torch.save(model.state_dict(), 'trained_model/trained_model_state_dict.pt')
-
-# Testing
-
-# model.eval()
-# model.to('cpu')
-# test_processor = DTrOCRProcessor(DTrOCRConfig())
-
-
-
-# for test_word_record in test_word_records[:50]:
-#     image_file = test_word_record.file_path
-#     image = Image.open(image_file).convert('RGB')
-
-#     inputs = test_processor(
-#         images=image,
-#         texts=test_processor.tokeniser.bos_token,
-#         return_tensors='pt'
-#     )
-
-#     model_output = model.generate(
-#         inputs,
-#         test_processor,
-#         num_beams=3
-#     )
-
-#     predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
-
-#     plt.figure(figsize=(10, 5))
-#     plt.title(predicted_text, fontsize=24)
-#     plt.imshow(np.array(image, dtype=np.uint8))
-#     plt.xticks([]), plt.yticks([])
-#     plt.savefig("plot.png")
+torch.save(model.state_dict(), 'trained_model/trained_new_synthetic_model_state_dict.pt')
