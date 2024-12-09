@@ -206,7 +206,7 @@ else:
 torch.set_float32_matmul_precision('high')
 
 START_EPOCH = 7
-new_model_destination_folder = "trained_model/freeze_half_layers_of_old_singleword_model"
+new_model_destination_folder = "trained_model/retrain_old_singleword_model"
 if not os.path.exists(new_model_destination_folder):
     os.makedirs(new_model_destination_folder)
 
@@ -217,30 +217,7 @@ model.load_state_dict(torch.load('./trained_model/old_singleword_models/epoch_7_
 # model.load_state_dict(torch.load(f'./trained_model/epoch_{START_EPOCH}_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 print(model)
 
-print("FREEZING HALF OF LAYERS OF OLD MODEL")
-# Freeze patch_embeddings, token_embedding, and positional_embedding
-for name, param in model._orig_mod.transformer.named_parameters():
-    if "patch_embeddings" in name or "token_embedding" in name or "positional_embedding" in name:
-        param.requires_grad = False
-
-# Freeze all hidden transformer layers except the last one
-for i, layer in enumerate(model._orig_mod.transformer.hidden_layers):
-    if i < len(model._orig_mod.transformer.hidden_layers) / 2:  # Freeze half of layers
-        for param in layer.parameters():
-            param.requires_grad = False
-    else:  # Unfreeze the last layers
-        for param in layer.parameters():
-            param.requires_grad = True
-
-# Ensure that the language model head is trainable
-for param in model._orig_mod.language_model_head.parameters():
-    param.requires_grad = True
-# Now only the last transformer block and the language model head will be trained
-
-# Iterate over all parameters in the model and print those with requires_grad=True (trainable)
-for name, param in model._orig_mod.named_parameters():
-    if param.requires_grad:
-        print(f"Trainable parameter: {name}")
+print("USING OLD SINGLE WORD MODEL WITH NO FROZEN LAYERS")
 
 # Training
 
