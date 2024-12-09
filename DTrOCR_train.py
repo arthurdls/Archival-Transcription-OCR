@@ -60,6 +60,34 @@ single_words_data = {
     'white_word_blur':[],
     'white_word_distort':[]
 }
+scene_words_data = {
+    'noise_word':[],
+    'noise_blur_word':[],
+    'noise_distort_word':[],
+    'sepia_word':[],
+    'sepia_blur_word':[],
+    'sepia_distort_word':[],
+    'white_word':[],
+    'white_blur_word':[],
+    'white_distort_word':[]
+}
+
+
+for file_name, train_data_sublist in scene_words_data.items():
+    with open(f'../scene_words/{file_name}/labels.txt', 'r') as file:
+        for line in file:
+            img_path, target = line.replace(",", "").replace("\n","").split(" ")
+            if img_path == 'image':
+                continue
+            datapoint = {
+                'image_path': os.getcwd() + f'/../scene_words/{file_name}/' + img_path,
+                'text': target
+            }
+            # 20% of data goes to validation
+            if random.randint(1, 5) == 1:
+                validation_data_list.append(datapoint)
+            else:
+                train_data_sublist.append(datapoint)
 
 for file_name, train_data_sublist in single_words_data.items():
     with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
@@ -119,6 +147,8 @@ for file_name, train_data_sublist in scene_lines_data.items():
     train_data_list += train_data_sublist
 for file_name, train_data_sublist in single_words_data.items():
     train_data_list += train_data_sublist
+for file_name, train_data_sublist in scene_words_data.items():
+    train_data_list += train_data_sublist
 
 print(f'Train size: {len(train_data_list)}; Validation size {len(validation_data_list)}')
 
@@ -153,8 +183,10 @@ config = DTrOCRConfig(
     # attn_implementation='flash_attention_2'
     gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
     vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
-    max_position_embeddings = 512
+    max_position_embeddings = 256
 )
+
+print("THIS MODEL HAS 256 MAX POSITIONAL EMBEDDING")
 
 train_data = SyntheticDataset(words=train_data_list, config=config)
 validation_data = SyntheticDataset(words=validation_data_list, config=config)
@@ -175,9 +207,15 @@ else:
 
 torch.set_float32_matmul_precision('high')
 
+START_EPOCH = 0
+new_model_destination_folder = "trained_model/equal_scene_cursive_data_256_max_positional"
+if not os.path.exists(new_model_destination_folder):
+    os.makedirs(new_model_destination_folder)
+
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
 model.to(device=device)
+# model.load_state_dict(torch.load(f'./trained_model/epoch_{START_EPOCH}_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 print(model)
 
 # Training
@@ -210,17 +248,17 @@ def send_inputs_to_device(dictionary, device):
 
 use_amp = True
 scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
-optimiser = torch.optim.Adam(params=model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-4)
 
 EPOCHS = 80
 train_losses, train_accuracies = [], []
 validation_losses, validation_accuracies = [], []
-for epoch in range(EPOCHS):
+for epoch in range(START_EPOCH, EPOCHS):
     epoch_losses, epoch_accuracies = [], []
     for inputs in tqdm.tqdm(train_dataloader, total=len(train_dataloader), desc=f'Epoch {epoch + 1}'):
 
         # set gradients to zero
-        optimiser.zero_grad()
+        optimizer.zero_grad()
 
         # send inputs to same device as model
         inputs = send_inputs_to_device(inputs, device=device)
@@ -233,7 +271,7 @@ for epoch in range(EPOCHS):
         scaler.scale(outputs.loss).backward()
 
         # update weights
-        scaler.step(optimiser)
+        scaler.step(optimizer)
         scaler.update()
 
         epoch_losses.append(outputs.loss.item())
@@ -253,6 +291,6 @@ for epoch in range(EPOCHS):
     validation_accuracies.append(validation_accuracy)
 
     print(f"Epoch: {epoch + 1} - Train loss: {train_losses[-1]}, Train accuracy: {train_accuracies[-1]}, Validation loss: {validation_losses[-1]}, Validation accuracy: {validation_accuracies[-1]}")
-    torch.save(model.state_dict(), f'trained_model/epoch_{epoch + 1}_checkpoint_new_synthetic_model_state_dict.pt')
+    torch.save(model.state_dict(), f'{new_model_destination_folder}/epoch_{epoch + 1}_checkpoint_new_synthetic_model_state_dict.pt')
 
-torch.save(model.state_dict(), 'trained_model/trained_new_synthetic_model_state_dict.pt')
+torch.save(model.state_dict(), f'{new_model_destination_folder}/trained_new_synthetic_model_state_dict.pt')
