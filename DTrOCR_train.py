@@ -205,7 +205,7 @@ else:
 
 torch.set_float32_matmul_precision('high')
 
-START_EPOCH = 7
+START_EPOCH = 16
 new_model_destination_folder = "trained_model/retrain_old_singleword_model"
 if not os.path.exists(new_model_destination_folder):
     os.makedirs(new_model_destination_folder)
@@ -213,8 +213,8 @@ if not os.path.exists(new_model_destination_folder):
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
 model.to(device=device)
-model.load_state_dict(torch.load('./trained_model/old_singleword_models/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
-# model.load_state_dict(torch.load(f'./trained_model/epoch_{START_EPOCH}_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
+# model.load_state_dict(torch.load('./trained_model/old_singleword_models/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load(f'./trained_model/retrain_old_singleword_model/epoch_{START_EPOCH}_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 print(model)
 
 print("USING OLD SINGLE WORD MODEL WITH NO FROZEN LAYERS")
