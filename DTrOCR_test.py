@@ -202,22 +202,32 @@ print(model)
 
 # Testing
 
-from datasets import load_dataset
-IAM = load_dataset("Teklia/IAM-line")
-SROIE = load_dataset("rth/sroie-2019-v2")
+# from datasets import load_dataset
+# IAM = load_dataset("Teklia/IAM-line")
 
-model.load_state_dict(torch.load('./epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load('../../epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 model.eval()
 model.to('cpu')
 test_processor = DTrOCRProcessor(config)
 
+test_data = []
 
-for datapoint in IAM['test']:
-    image = datapoint['image']
+with open(f'../washingtondb-v1.0/ground_truth/labeled_transcribed_words.txt', 'r') as file:
+    for line in file:
+        img_name, target = line.replace(",", "").replace("\n","").split(" ")
+        datapoint = {
+            'image_path': os.getcwd() + f'/../washingtondb-v1.0/data/word_images_normalized/{img_name}.png',
+            'text': target
+        }
+        test_data.append(datapoint)
+
+for datapoint in test_data:
+    with Image.open(datapoint['image_path']).convert('RGB') as img:
+        image = img
     actual_text = datapoint['text']
 
     inputs = test_processor(
-        images=image.convert('RGB'),
+        images=image,
         texts=test_processor.tokeniser.bos_token,
         return_tensors='pt'
     )
@@ -229,10 +239,12 @@ for datapoint in IAM['test']:
     )
 
     predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
-    print(f"Actual: {actual_text}, Predicted: {predicted_text}")
+    print(f"Actual: {actual_text} \nPredicted: {predicted_text}")
+    with open('model_singleword_results.txt', 'a') as f:
+        f.write(f'{actual_text}, {predicted_text}\n')
 
-    plt.figure(figsize=(10, 5))
-    plt.title(predicted_text, fontsize=24)
-    plt.imshow(np.array(image, dtype=np.uint8))
-    plt.xticks([]), plt.yticks([])
-    plt.savefig("plots/plot.png")
+    # plt.figure(figsize=(10, 5))
+    # plt.title(predicted_text, fontsize=24)
+    # plt.imshow(np.array(image, dtype=np.uint8))
+    # plt.xticks([]), plt.yticks([])
+    # plt.savefig("plots/plot.png")

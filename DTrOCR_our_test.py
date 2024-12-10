@@ -24,36 +24,40 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-os.environ['HF_HUB_OFFLINE']='1'
-torch.multiprocessing.set_sharing_strategy('file_system')
+# os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+# os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+# os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+# os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+# os.environ['HF_HUB_OFFLINE']='1'
+# torch.multiprocessing.set_sharing_strategy('file_system')
 
-files = {
-    'noise_word':[],
-    'noise_word_blur':[],
-    'noise_word_distort':[],
-    'sepia_word':[],
-    'sepia_word_blur':[],
-    'sepia_word_distort':[],
-    'white_word':[],
-    'white_word_blur':[],
-    'white_word_distort':[]
-}
+def get_folder_names(path):
+    folders = []
+    for entry in os.scandir(path):
+        if entry.is_dir():
+            folders.append(entry.name)
+    return folders
 
-for file_name, test_data_list in files.items():
-    with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
-        for line in file:
-            img_path, target = line.replace(",", "").replace("\n","").split(" ")
-            if img_path == 'image':
-                continue
-            datapoint = {
-                'image_path': os.getcwd() + f'/../single_word/{file_name}/' + img_path,
-                'text': target
-            }
-            test_data_list.append(datapoint)
+
+def get_data_dict(folder_names, data_directory):
+    files = {name: [] for name in folder_names}
+    for file_name, test_data_list in files.items():
+        with open(f'{data_directory}/{file_name}/labels.txt', 'r') as file:
+            for line in file:
+                split_line = line.replace("\n","").split(" ")
+                img_path, target = split_line[0], " ".join(split_line[1:])
+                if img_path == 'image':
+                    continue
+                datapoint = {
+                    'image_path': os.getcwd() + f'/{data_directory}/{file_name}/' + img_path,
+                    'text': target
+                }
+                test_data_list.append(datapoint)
+    return files
+
+directory_path = '../test_synth/'
+folder_names = get_folder_names(directory_path)
+files = get_data_dict(folder_names, directory_path)
 
 # # Data Loader
 
@@ -83,8 +87,8 @@ class OurDataset(Dataset):
         }
 
 config = DTrOCRConfig(
-    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
-    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    # gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    # vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -110,7 +114,7 @@ torch.set_float32_matmul_precision('high')
 
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
-model.load_state_dict(torch.load('./trained_model/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load('../../epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 model.to(device=device)
 print(model)
 
@@ -167,6 +171,8 @@ for file_name, test_data_list in files.items():
         cer_scores += [cer(actual_text, predicted_text)]
 
         # print(f"Actual: {actual_text}, Predicted: {predicted_text}, CER: {cer_scores[-1]} - {i}/{len(test_data_list)}")
+        if i % 100 == 0:
+            print(f"{i}/{len(test_data_list)}")
     print(f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}")
 
 
