@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
@@ -58,6 +59,7 @@ def get_data_dict(folder_names, data_directory):
 directory_path = '../test_synth/'
 folder_names = get_folder_names(directory_path)
 files = get_data_dict(folder_names, directory_path)
+print("Number of files: ", len(files))
 
 # # Data Loader
 
@@ -142,38 +144,42 @@ def evaluate_model(model: torch.nn.Module, dataloader: DataLoader, processor: DT
 def send_inputs_to_device(dictionary, device):
     return {key: value.to(device=device) if isinstance(value, torch.Tensor) else value for key, value in dictionary.items()}
 
-for file_name, test_data_list in files.items():
-    model.eval()
-    model.to('cpu')
-    test_processor = DTrOCRProcessor(config)
+# for file_name, test_data_list in files.items():
+file_name = list(files.keys())[int(sys.argv[1])]
+print("Working on:", file_name)
 
-    i = 0
-    cer_scores = []
-    for datapoint in test_data_list:
-        i += 1
-        with Image.open(datapoint['image_path']).convert('RGB') as img:
-            image = img
-        actual_text = datapoint['text']
+test_data_list = files[file_name]
+model.eval()
+model.to('cpu')
+test_processor = DTrOCRProcessor(config)
 
-        inputs = test_processor(
-            images=image.convert('RGB'),
-            texts=test_processor.tokeniser.bos_token,
-            return_tensors='pt'
-        )
+i = 0
+cer_scores = []
+for datapoint in test_data_list:
+    i += 1
+    with Image.open(datapoint['image_path']).convert('RGB') as img:
+        image = img
+    actual_text = datapoint['text']
 
-        model_output = model.generate(
-            inputs,
-            test_processor,
-            num_beams=3
-        )
+    inputs = test_processor(
+        images=image.convert('RGB'),
+        texts=test_processor.tokeniser.bos_token,
+        return_tensors='pt'
+    )
 
-        predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
-        cer_scores += [cer(actual_text, predicted_text)]
+    model_output = model.generate(
+        inputs,
+        test_processor,
+        num_beams=3
+    )
 
-        # print(f"Actual: {actual_text}, Predicted: {predicted_text}, CER: {cer_scores[-1]} - {i}/{len(test_data_list)}")
-        if i % 100 == 0:
-            print(f"{i}/{len(test_data_list)}")
-    print(f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}")
+    predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
+    cer_scores += [cer(actual_text, predicted_text)]
+
+    # print(f"Actual: {actual_text}, Predicted: {predicted_text}, CER: {cer_scores[-1]} - {i}/{len(test_data_list)}")
+    if i % 100 == 0:
+        print(f"{i}/{len(test_data_list)}")
+print(f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}")
 
 
 # for file_name, test_dataloader in files_with_dataloaders.items():
