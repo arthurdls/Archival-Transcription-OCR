@@ -13,6 +13,10 @@ from PIL import Image
 from DTrOCR.dtrocr.processor import DTrOCRProcessor, modified_build_inputs_with_special_tokens
 from DTrOCR.dtrocr.config import DTrOCRConfig
 from DTrOCR.dtrocr.model import DTrOCRLMHeadModel
+from jiwer import cer
+
+import warnings
+warnings.filterwarnings("ignore")
 
 seed = 42
 random.seed(seed)
@@ -20,12 +24,12 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-# os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-# os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-# os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-# os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-# os.environ['HF_HUB_OFFLINE']='1'
-# torch.multiprocessing.set_sharing_strategy('file_system')
+os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+os.environ['HF_HUB_OFFLINE']='1'
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 files = {
     'noise_word':[],
@@ -42,7 +46,9 @@ files = {
 for file_name, test_data_list in files.items():
     with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
         for line in file:
-            img_path, target = line.replace(",", "").split(" ")
+            img_path, target = line.replace(",", "").replace("\n","").split(" ")
+            if img_path == 'image':
+                continue
             datapoint = {
                 'image_path': os.getcwd() + f'/../single_word/{file_name}/' + img_path,
                 'text': target
@@ -77,6 +83,8 @@ class OurDataset(Dataset):
         }
 
 config = DTrOCRConfig(
+    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -102,11 +110,11 @@ torch.set_float32_matmul_precision('high')
 
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
+model.load_state_dict(torch.load('./trained_model/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
 model.to(device=device)
 print(model)
 
-
-def evaluate_model(model: torch.nn.Module, dataloader: DataLoader) -> Tuple[float, float]:
+def evaluate_model(model: torch.nn.Module, dataloader: DataLoader, processor: DTrOCRProcessor) -> Tuple[float, float]:
     # set model to evaluation mode
     model.eval()
 
@@ -130,46 +138,38 @@ def evaluate_model(model: torch.nn.Module, dataloader: DataLoader) -> Tuple[floa
 def send_inputs_to_device(dictionary, device):
     return {key: value.to(device=device) if isinstance(value, torch.Tensor) else value for key, value in dictionary.items()}
 
-for file_name, test_dataloader in files_with_dataloaders.items():
-    test_loss, test_accuracy = evaluate_model(model, test_dataloader)
+for file_name, test_data_list in files.items():
+    model.eval()
+    model.to('cpu')
+    test_processor = DTrOCRProcessor(config)
 
-    print(f"{file_name}:: Loss: {test_loss} - Accuracy: {test_accuracy}")
+    i = 0
+    cer_scores = []
+    for datapoint in test_data_list:
+        i += 1
+        with Image.open(datapoint['image_path']).convert('RGB') as img:
+            image = img
+        actual_text = datapoint['text']
+
+        inputs = test_processor(
+            images=image.convert('RGB'),
+            texts=test_processor.tokeniser.bos_token,
+            return_tensors='pt'
+        )
+
+        model_output = model.generate(
+            inputs,
+            test_processor,
+            num_beams=3
+        )
+
+        predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
+        cer_scores += [cer(actual_text, predicted_text)]
+
+        # print(f"Actual: {actual_text}, Predicted: {predicted_text}, CER: {cer_scores[-1]} - {i}/{len(test_data_list)}")
+    print(f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}")
 
 
-# Testing
-
-# from datasets import load_dataset
-# IAM = load_dataset("Teklia/IAM-line")
-# SROIE = load_dataset("rth/sroie-2019-v2")
-
-# model.load_state_dict(torch.load('./epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
-# model.eval()
-# model.to('cpu')
-# test_processor = DTrOCRProcessor(config)
-
-
-# for datapoint in test_data_list:
-#     with Image.open(datapoint['image_path']).convert('RGB') as img:
-#         image = img
-#     actual_text = datapoint['text']
-
-#     inputs = test_processor(
-#         images=image.convert('RGB'),
-#         texts=test_processor.tokeniser.bos_token,
-#         return_tensors='pt'
-#     )
-
-#     model_output = model.generate(
-#         inputs,
-#         test_processor,
-#         num_beams=3
-#     )
-
-#     predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
-#     print(f"Actual: {actual_text}, Predicted: {predicted_text}")
-
-#     plt.figure(figsize=(10, 5))
-#     plt.title(predicted_text, fontsize=24)
-#     plt.imshow(np.array(image, dtype=np.uint8))
-#     plt.xticks([]), plt.yticks([])
-#     plt.savefig("plots/plot.png")
+# for file_name, test_dataloader in files_with_dataloaders.items():
+#     test_loss, test_accuracy = evaluate_model(model, test_dataloader, DTrOCRProcessor(config))
+#     print(f"{file_name}:: Loss: {test_loss} - Accuracy: {test_accuracy}")
