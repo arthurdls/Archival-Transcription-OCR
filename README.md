@@ -10,8 +10,11 @@ Code for training and testing the DTrOCR model is in the DTrOCR_code folder. Bef
 
 # Testing TrOCR
 
+Code for testing the TrOCR model is in the TrOCR_code folder. To test on synthetic data, use TrOCR_our_test.py after installing dependencies. Change FILE_PATH to the folder containing outputs from synthetic data generation as described below and run TrOCR_our_test.py.
+To test on the Washington Database use TrOCR_test.py with the Washington database folder in the directory above.
+
 # Data
-To acccess data used in project: https://drive.google.com/drive/folders/1gR1sH-_Lpj5Pz6p8S_GMBsQ7M8FOh98M?usp=sharing
+To access data used in project: https://drive.google.com/drive/folders/1gR1sH-_Lpj5Pz6p8S_GMBsQ7M8FOh98M?usp=sharing
 
 Datasets <br>
 IIIT-HWS: https://cvit.iiit.ac.in/research/projects/cvit-projects/matchdocimgs#iiit-hws <br>
