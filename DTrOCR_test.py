@@ -20,12 +20,12 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-# os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-# os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-# os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-# os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-# os.environ['HF_HUB_OFFLINE']='1'
-# torch.multiprocessing.set_sharing_strategy('file_system')
+os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+os.environ['HF_HUB_OFFLINE']='1'
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 # print("Loading Cache...")
 
@@ -91,8 +91,8 @@ torch.cuda.manual_seed_all(seed)
 
 config = DTrOCRConfig(
     # attn_implementation='flash_attention_2'
-    # gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
-    # vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -205,18 +205,19 @@ print(model)
 # from datasets import load_dataset
 # IAM = load_dataset("Teklia/IAM-line")
 
-model.load_state_dict(torch.load('../../epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load('./trained_model/retrain_old_singleword_model/epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
 model.eval()
 model.to('cpu')
 test_processor = DTrOCRProcessor(config)
 
 test_data = []
 
-with open(f'../washingtondb-v1.0/ground_truth/labeled_transcribed_words.txt', 'r') as file:
+with open(f'../washingtondb-v1.0/ground_truth/labeled_transcribed_lines.txt', 'r') as file:
     for line in file:
-        img_name, target = line.replace(",", "").replace("\n","").split(" ")
+        split_line = line.replace("\n","").split(" ")
+        img_name, target = split_line[0], " ".join(split_line[1:])
         datapoint = {
-            'image_path': os.getcwd() + f'/../washingtondb-v1.0/data/word_images_normalized/{img_name}.png',
+            'image_path': os.getcwd() + f'/../washingtondb-v1.0/data/line_images_normalized/{img_name}.png',
             'text': target
         }
         test_data.append(datapoint)
@@ -240,8 +241,8 @@ for datapoint in test_data:
 
     predicted_text = test_processor.tokeniser.decode(model_output[0], skip_special_tokens=True)
     print(f"Actual: {actual_text} \nPredicted: {predicted_text}")
-    with open('model_singleword_results.txt', 'a') as f:
-        f.write(f'{actual_text}, {predicted_text}\n')
+    with open('model_lines_results.txt', 'a') as f:
+        f.write(f'{actual_text} > {predicted_text}\n')
 
     # plt.figure(figsize=(10, 5))
     # plt.title(predicted_text, fontsize=24)

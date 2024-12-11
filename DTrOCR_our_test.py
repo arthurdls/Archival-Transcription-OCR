@@ -25,12 +25,12 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-# os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-# os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-# os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-# os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-# os.environ['HF_HUB_OFFLINE']='1'
-# torch.multiprocessing.set_sharing_strategy('file_system')
+os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
+os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
+os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
+os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
+os.environ['HF_HUB_OFFLINE']='1'
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def get_folder_names(path):
     folders = []
@@ -89,8 +89,8 @@ class OurDataset(Dataset):
         }
 
 config = DTrOCRConfig(
-    # gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
-    # vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -116,9 +116,9 @@ torch.set_float32_matmul_precision('high')
 
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
-model.load_state_dict(torch.load('../../epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
+model.load_state_dict(torch.load('./trained_model/retrain_old_singleword_model/epoch_16_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True, map_location=torch.device(device)))
 model.to(device=device)
-print(model)
+# print(model)
 
 def evaluate_model(model: torch.nn.Module, dataloader: DataLoader, processor: DTrOCRProcessor) -> Tuple[float, float]:
     # set model to evaluation mode
@@ -145,7 +145,7 @@ def send_inputs_to_device(dictionary, device):
     return {key: value.to(device=device) if isinstance(value, torch.Tensor) else value for key, value in dictionary.items()}
 
 # for file_name, test_data_list in files.items():
-file_name = list(files.keys())[int(sys.argv[1])]
+file_name = sys.argv[1] # list(files.keys())[int(sys.argv[1])] # python file argument for which file to run
 print("Working on:", file_name)
 
 test_data_list = files[file_name]
@@ -177,9 +177,13 @@ for datapoint in test_data_list:
     cer_scores += [cer(actual_text, predicted_text)]
 
     # print(f"Actual: {actual_text}, Predicted: {predicted_text}, CER: {cer_scores[-1]} - {i}/{len(test_data_list)}")
-    if i % 100 == 0:
+    if i % 10 == 0:
         print(f"{i}/{len(test_data_list)}")
-print(f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}")
+out = f"{file_name}: Average CER: {sum(cer_scores) / len(cer_scores)}"
+print(out)
+
+with open('result_cer.txt', 'a') as f:
+    f.write(f"out\n")
 
 
 # for file_name, test_dataloader in files_with_dataloaders.items():
