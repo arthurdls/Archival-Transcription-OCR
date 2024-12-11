@@ -21,8 +21,9 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
+torch.multiprocessing.set_sharing_strategy('file_system')
 
-FOLDER_PATH = '/content/test_synth'    # change to folder holding images and ground truth text file
+FOLDER_PATH = '../synthetic_data'    # change to folder holding folders of images and ground truth text file
 
 test_files = {f:[] for f in os.listdir(FOLDER_PATH)}
 
@@ -34,7 +35,7 @@ for file_name, test_data_list in test_files.items():
             if img_path == 'image':
                 continue
             datapoint = {
-                'image_path': f'/content/test_synth/{file_name}/' + img_path,
+                'image_path': f'{FOLDER_PATH}/{file_name}/' + img_path,
                 'text': target
             }
             test_data_list.append(datapoint)
@@ -79,7 +80,6 @@ else:
 torch.set_float32_matmul_precision('high')
 
 model = TrOCRModel
-model = torch.compile(model)
 model.to(device=device)
 print(model)
 
