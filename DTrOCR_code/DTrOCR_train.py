@@ -154,9 +154,9 @@ model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
 model.to(device=device)
 
+START_EPOCH = 0
 have_pretrained_model_location = False
 if have_pretrained_model_location:
-    START_EPOCH = 0
     if START_EPOCH:
         model.load_state_dict(torch.load(f'example_name_epoch_{START_EPOCH}_model_state_dict.pt', weights_only=True))
     else:
