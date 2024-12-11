@@ -9,15 +9,12 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
-from jiwer import cer
+import jiwer
 
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
-TrOCRProcessor = TrOCRProcessor.from_pretrained(os.getcwd() + '/pretrained_repos/microsoft/trocr-large-handwritten')
-TrOCRModel = VisionEncoderDecoderModel.from_pretrained(os.getcwd() + '/pretrained_repos/microsoft/trocr-large-handwritten')
-
-import warnings
-warnings.filterwarnings("ignore")
+TrOCRProcessor = TrOCRProcessor.from_pretrained('microsoft/trocr-large-handwritten')
+TrOCRModel = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-large-handwritten')
 
 seed = 42
 random.seed(seed)
@@ -25,33 +22,19 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
-os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
-os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
-os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
-os.environ['HF_HUB_OFFLINE']='1'
-torch.multiprocessing.set_sharing_strategy('file_system')
+FOLDER_PATH = '/content/test_synth'    # change to folder holding images and ground truth text file
 
-files = {
-    'noise_word':[],
-    'noise_word_blur':[],
-    'noise_word_distort':[],
-    'sepia_word':[],
-    'sepia_word_blur':[],
-    'sepia_word_distort':[],
-    'white_word':[],
-    'white_word_blur':[],
-    'white_word_distort':[]
-}
+test_files = {f:[] for f in os.listdir(FOLDER_PATH)}
 
-for file_name, test_data_list in files.items():
-    with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
+for file_name, test_data_list in test_files.items():
+    with open(f'{FOLDER_PATH}/{file_name}/labels.txt', 'r') as file:
         for line in file:
-            img_path, target = line.replace(",", "").replace("\n","").split(" ")
+            s = line.replace(",", "").split(" ")
+            img_path, target = s[0], " ".join(s[1:])
             if img_path == 'image':
                 continue
             datapoint = {
-                'image_path': os.getcwd() + f'/../single_word/{file_name}/' + img_path,
+                'image_path': f'/content/test_synth/{file_name}/' + img_path,
                 'text': target
             }
             test_data_list.append(datapoint)
@@ -75,12 +58,12 @@ class OurDataset(Dataset):
             'labels': self.words[item]['text']
         }
 
-files_with_dataloaders = {}
+test_files_with_dataloaders = {}
 
-for file_name, test_data_list in files.items():
+for file_name, test_data_list in test_files.items():
     test_data = OurDataset(words=test_data_list)
     test_dataloader = DataLoader(test_data, batch_size=32, shuffle=False, num_workers=mp.cpu_count())
-    files_with_dataloaders[file_name] = test_dataloader
+    test_files_with_dataloaders[file_name] = test_dataloader
 
 # Model
 
@@ -108,26 +91,26 @@ def evaluate_model(model: torch.nn.Module, processor, dataloader: DataLoader) ->
     references, hypotheses = [], []
     with torch.no_grad():
         for inputs in tqdm.tqdm(dataloader, total=len(dataloader), desc=f'Evaluating test set'):
-            inputs = send_inputs_to_device(inputs, device=0)
+            inputs = send_inputs_to_device(inputs, device=device)
             outputs = model.generate(inputs['pixel_values'], max_length = 300)
             hypothesis = processor.batch_decode(outputs, skip_special_tokens=True)
 
             hypotheses.extend(hypothesis)
             references.extend(inputs['labels'])
 
-    test_cer = cer(reference=references, hypothesis=hypotheses)
+    accuracy = jiwer.cer(reference=references, hypothesis=hypotheses)
 
     # set model back to training mode
     model.train()
 
-    return test_cer
-
+    return accuracy
 
 def send_inputs_to_device(dictionary, device):
     return {key: value.to(device=device) if isinstance(value, torch.Tensor) else value for key, value in dictionary.items()}
 
 
-for file_name, test_dataloader in files_with_dataloaders.items():
-    test_cer = evaluate_model(model, TrOCRProcessor, test_dataloader)
+if __name__ == '__main__':
+    for file_name, test_dataloader in test_files_with_dataloaders.items():
+        test_accuracy = evaluate_model(model, TrOCRProcessor, test_dataloader)
 
-    print(f"{file_name}:: - CER: {test_cer}")
+        print(f"{file_name}:: - cer: {test_accuracy}")
