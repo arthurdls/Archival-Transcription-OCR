@@ -35,6 +35,7 @@ os.environ['HF_HUB_OFFLINE']='1'
 
 print("Loading Data...")
 
+
 def get_folder_names(path):
     folders = []
     for entry in os.scandir(path):
@@ -236,3 +237,91 @@ for epoch in range(START_EPOCH, EPOCHS):
     torch.save(model.state_dict(), f'{new_model_destination_folder}/epoch_{epoch + 1}_checkpoint_new_synthetic_model_state_dict.pt')
 
 torch.save(model.state_dict(), f'{new_model_destination_folder}/trained_new_synthetic_model_state_dict.pt')
+
+
+### Former code for IIIT Dataset ###
+# print("Loading Cache...")
+
+# files_downloaded = set()
+
+# with open('./files_downloaded_cache.txt', 'r') as cache:
+#     for line in cache:
+#         files_downloaded.add(line.replace("\n","")) 
+        
+# print("Loading Data...")
+
+# train_data_list = []
+# validation_data_list = []
+# test_data_list = [] # TODO
+
+# with open('./ground_truth/IIIT-HWS-90K.txt', 'r') as file:
+#     for line in file:
+#         # flag: train = 0, validation = 1
+#         img_path, target, _, train_val_flag = line.split()
+#         datapoint = {
+#             'image_path': os.getcwd() + '/Images_90K_Normalized/' + img_path,
+#             'text': target
+#         }
+#         if datapoint['image_path'] not in files_downloaded:
+#             continue
+
+#         if train_val_flag == '0':
+#             train_data_list.append(datapoint)
+#         elif train_val_flag == '1':
+#             validation_data_list.append(datapoint)
+
+# # Data Loader
+
+# class IIITHWSDataset(Dataset):
+#     def __init__(self, words, config: DTrOCRConfig):
+#         super(IIITHWSDataset, self).__init__()
+#         self.words = words
+#         self.processor = DTrOCRProcessor(config, add_eos_token=True, add_bos_token=True)
+
+#     def __len__(self):
+#         return len(self.words)
+
+#     def __getitem__(self, item):
+#         with Image.open(self.words[item]['image_path']).convert('RGB') as img:
+#             inputs = self.processor(
+#                 images= img,
+#                 texts=self.words[item]['text'],
+#                 padding='max_length',
+#                 return_tensors="pt",
+#                 return_labels=True,
+#             )
+#         return {
+#             'pixel_values': inputs.pixel_values[0],
+#             'input_ids': inputs.input_ids[0],
+#             'attention_mask': inputs.attention_mask[0],
+#             'labels': inputs.labels[0]
+#         }
+
+###
+
+### Freezing Layers Code ###
+# # Freeze patch_embeddings, token_embedding, and positional_embedding
+# for name, param in model._orig_mod.transformer.named_parameters():
+#     if "patch_embeddings" in name or "token_embedding" in name or "positional_embedding" in name:
+#         param.requires_grad = False
+# 
+# # Freeze all hidden transformer layers except the last one
+# for i, layer in enumerate(model._orig_mod.transformer.hidden_layers):
+#     if i < len(model._orig_mod.transformer.hidden_layers) - 1:  # Freeze all layers except the last one
+#         for param in layer.parameters():
+#             param.requires_grad = False
+#     else:  # Unfreeze the last layer
+#         for param in layer.parameters():
+#             param.requires_grad = True
+# 
+# # Ensure that the language model head is trainable
+# for param in model._orig_mod.language_model_head.parameters():
+#     param.requires_grad = True
+# # Now only the last transformer block and the language model head will be trained
+# 
+# # Iterate over all parameters in the model and print those with requires_grad=True (trainable)
+# for name, param in model._orig_mod.named_parameters():
+#     if param.requires_grad:
+#         print(f"Trainable parameter: {name}")
+
+###
