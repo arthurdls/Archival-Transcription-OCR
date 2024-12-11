@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from DTrOCR.dtrocr.processor import DTrOCRProcessor, modified_build_inputs_with_special_tokens
+from DTrOCR.dtrocr.processor import DTrOCRProcessor
 from DTrOCR.dtrocr.config import DTrOCRConfig
 from DTrOCR.dtrocr.model import DTrOCRLMHeadModel
 
@@ -22,13 +22,14 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
+torch.multiprocessing.set_sharing_strategy('file_system')
 
+# Supercloud Environment Variables
 os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
 os.environ['TF_ENABLE_ONEDNN_OPTS']='0'
 os.environ['XLA_FLAGS']='--xla_gpu_cuda_data_dir=/usr/local/pkg/cuda/cuda-11.8'
 os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
 os.environ['HF_HUB_OFFLINE']='1'
-torch.multiprocessing.set_sharing_strategy('file_system')
 
 # Data
 
