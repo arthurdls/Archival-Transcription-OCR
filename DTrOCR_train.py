@@ -30,115 +30,57 @@ os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
 os.environ['HF_HUB_OFFLINE']='1'
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+# Data
+
 print("Loading Data...")
 
-files = [
-    'white_line',
-    'white_blur_line',
-    'white_distort_line',
-    'noise_line',
-    'noise_blur_line',
-    'noise_distort_line',
-    'sepia_line',
-    'sepia_blur_line',
-    'sepia_distort_line'
-]
+def get_folder_names(path):
+    folders = []
+    for entry in os.scandir(path):
+        if entry.is_dir():
+            folders.append(entry.name)
+    return folders
 
-cursive_lines_data = {file:[] for file in files}
-scene_lines_data = {file:[] for file in files}
+def get_data_dict(folder_names, data_directory):
+    files = {name: [] for name in folder_names}
+    for file_name, train_data_list in files.items():
+        with open(f'{data_directory}/{file_name}/labels.txt', 'r') as file:
+            for line in file:
+                split_line = line.replace("\n","").split(" ")
+                img_path, target = split_line[0], " ".join(split_line[1:])
+                if img_path == 'image':
+                    continue
+                datapoint = {
+                    'image_path': os.getcwd() + f'/{data_directory}/{file_name}/' + img_path,
+                    'text': target
+                }
+                # 20% of data goes to validation
+                if random.randint(1, 5) == 1:
+                    validation_data_list.append(datapoint)
+                else:
+                    train_data_list.append(datapoint)
+    return files
+
 validation_data_list = []
 train_data_list = []
 
-single_words_data = {
-    'noise_word':[],
-    'noise_word_blur':[],
-    'noise_word_distort':[],
-    'sepia_word':[],
-    'sepia_word_blur':[],
-    'sepia_word_distort':[],
-    'white_word':[],
-    'white_word_blur':[],
-    'white_word_distort':[]
-}
-scene_words_data = {
-    'noise_word':[],
-    'noise_blur_word':[],
-    'noise_distort_word':[],
-    'sepia_word':[],
-    'sepia_blur_word':[],
-    'sepia_distort_word':[],
-    'white_word':[],
-    'white_blur_word':[],
-    'white_distort_word':[]
-}
+directory_path = '../cursive_lines/'
+folder_names = get_folder_names(directory_path)
+cursive_lines_data = get_data_dict(folder_names, directory_path)
+ 
 
+directory_path = '../scene_lines/'
+folder_names = get_folder_names(directory_path)
+scene_lines_data = get_data_dict(folder_names, directory_path)
+ 
 
-for file_name, train_data_sublist in scene_words_data.items():
-    with open(f'../scene_words/{file_name}/labels.txt', 'r') as file:
-        for line in file:
-            img_path, target = line.replace(",", "").replace("\n","").split(" ")
-            if img_path == 'image':
-                continue
-            datapoint = {
-                'image_path': os.getcwd() + f'/../scene_words/{file_name}/' + img_path,
-                'text': target
-            }
-            # 20% of data goes to validation
-            if random.randint(1, 5) == 1:
-                validation_data_list.append(datapoint)
-            else:
-                train_data_sublist.append(datapoint)
+directory_path = '../single_word/'
+folder_names = get_folder_names(directory_path)
+single_words_data = get_data_dict(folder_names, directory_path)
 
-for file_name, train_data_sublist in single_words_data.items():
-    with open(f'../single_word/{file_name}/labels.txt', 'r') as file:
-        for line in file:
-            img_path, target = line.replace(",", "").replace("\n","").split(" ")
-            if img_path == 'image':
-                continue
-            datapoint = {
-                'image_path': os.getcwd() + f'/../single_word/{file_name}/' + img_path,
-                'text': target
-            }
-            # 20% of data goes to validation
-            if random.randint(1, 5) == 1:
-                validation_data_list.append(datapoint)
-            else:
-                train_data_sublist.append(datapoint)
-
-for file_name, train_data_sublist in cursive_lines_data.items():
-    with open(f'../cursive_lines/{file_name}/labels.txt', 'r') as file:
-        for line in file:
-            split_line = line.replace(",", "").replace("\n","").split(" ")
-            img_path, target = split_line[0], " ".join(split_line[1:])
-            if img_path == 'image':
-                continue
-            datapoint = {
-                'image_path': os.getcwd() + f'/../cursive_lines/{file_name}/' + img_path,
-                'text': target
-            }
-            # 20% of data goes to validation
-            if random.randint(1, 5) == 1:
-                validation_data_list.append(datapoint)
-            else:
-                train_data_sublist.append(datapoint)
-
-for file_name, train_data_sublist in scene_lines_data.items():
-    with open(f'../scene_lines/{file_name}/labels.txt', 'r') as file:
-        for line in file:
-            split_line = line.replace(",", "").replace("\n","").split(" ")
-            img_path, target = split_line[0], " ".join(split_line[1:])
-
-            if img_path == 'image':
-                continue
-            datapoint = {
-                'image_path': os.getcwd() + f'/../scene_lines/{file_name}/' + img_path,
-                'text': target
-            }
-            # 20% of data goes to validation
-            if random.randint(1, 5) == 1:
-                validation_data_list.append(datapoint)
-            else:
-                train_data_sublist.append(datapoint)
+directory_path = '../scene_words/'
+folder_names = get_folder_names(directory_path)
+scene_words_data = get_data_dict(folder_names, directory_path)
 
 # unify train data
 for file_name, train_data_sublist in cursive_lines_data.items():
@@ -179,10 +121,11 @@ class SyntheticDataset(Dataset):
             'labels': inputs.labels[0]
         }
 
+# download repos for offline use
 config = DTrOCRConfig(
     # attn_implementation='flash_attention_2'
-    gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
-    vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
+    # gpt2_hf_model = os.getcwd() + '/pretrained_repos/openai-community/gpt2',
+    # vit_hf_model = os.getcwd() + '/pretrained_repos/google/vit-base-patch16-244',
     max_position_embeddings = 512
 )
 
@@ -205,26 +148,29 @@ else:
 
 torch.set_float32_matmul_precision('high')
 
-START_EPOCH = 16
-new_model_destination_folder = "trained_model/retrain_old_singleword_model"
-if not os.path.exists(new_model_destination_folder):
-    os.makedirs(new_model_destination_folder)
-
 model = DTrOCRLMHeadModel(config)
 model = torch.compile(model)
 model.to(device=device)
-# model.load_state_dict(torch.load('./trained_model/old_singleword_models/epoch_7_checkpoint_model_state_dict.pt', weights_only=True))
-model.load_state_dict(torch.load(f'./trained_model/retrain_old_singleword_model/epoch_{START_EPOCH}_checkpoint_new_synthetic_model_state_dict.pt', weights_only=True))
-print(model)
 
-print("USING OLD SINGLE WORD MODEL WITH NO FROZEN LAYERS")
+have_pretrained_model_location = False
+if have_pretrained_model_location:
+    START_EPOCH = 0
+    if START_EPOCH:
+        model.load_state_dict(torch.load(f'example_name_epoch_{START_EPOCH}_model_state_dict.pt', weights_only=True))
+    else:
+        model.load_state_dict(torch.load('example.pt', weights_only=True))
+
+new_model_destination_folder = "trained_model/"
+if not os.path.exists(new_model_destination_folder):
+    os.makedirs(new_model_destination_folder)
+
+print(model)
 
 # Training
 
 print("Training Model...")
 
 def evaluate_model(model: torch.nn.Module, dataloader: DataLoader) -> Tuple[float, float]:
-    # set model to evaluation mode
     model.eval()
 
     losses, accuracies = [], []
@@ -238,10 +184,7 @@ def evaluate_model(model: torch.nn.Module, dataloader: DataLoader) -> Tuple[floa
 
     loss = sum(losses) / len(losses)
     accuracy = sum(accuracies) / len(accuracies)
-
-    # set model back to training mode
     model.train()
-
     return loss, accuracy
 
 def send_inputs_to_device(dictionary, device):
@@ -251,7 +194,7 @@ use_amp = True
 scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-4)
 
-EPOCHS = 80
+EPOCHS = 30
 train_losses, train_accuracies = [], []
 validation_losses, validation_accuracies = [], []
 for epoch in range(START_EPOCH, EPOCHS):
@@ -275,12 +218,9 @@ for epoch in range(START_EPOCH, EPOCHS):
         scaler.step(optimizer)
         scaler.update()
 
+        # update cumulative loss and accuracy
         epoch_losses.append(outputs.loss.item())
         epoch_accuracies.append(outputs.accuracy.item())
-
-        # iters = len(epoch_losses)
-        # if iters % 100 == 0:
-        #     print(f"Iter: {iters} - Loss: {sum(epoch_losses[-100:])/100} - Accuracy: {sum(epoch_accuracies[-100:])/100}")
 
     # store loss and metrics
     train_losses.append(sum(epoch_losses) / len(epoch_losses))
